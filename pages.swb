@@ -1,0 +1,153 @@
+-- Check page approval status for Live
+-- Update member and company page ID
+SELECT creatorApplicationEntity, featureType, currentReviewStatus, currentReviewReason, reviewHistory
+FROM data_derived.pulitzer_creator_application_review
+WHERE featuretype = 'LIVE_VIDEO'
+AND creatorapplicationentity LIKE '%urn:li:company:2114%'
+ORDER BY featureType, currentreviewstatus
+LIMIT 5;
+
+-- Retrieve Newsletter Published By Member ID
+-- Replace '1234' with member ID and insert relevant epoch time
+SELECT * FROM prod_publishing.article_contents
+where author = 'urn:li:member:1234'
+and modified_date > 1629904999
+
+-- Unfollows/follows on a company page
+-- Replace <CPID> with company ID, status D represents unfollows (A = follows)
+select *
+from prod_foundation_tables.fact_sas_company_follower
+where company_id = <CPID>
+and status = 'D'
+
+-- General Company Page changes
+-- Replace :companies with CID; replace dates with start and end dates
+SELECT * FROM prod_dbchanges_OrganizationV2.Organization WHERE key.organizationId in (:companies) AND organization.datepartition >= '2022-01-01' AND organization.datepartition <= '2022-02-01' ORDER BY datepartition;
+
+-- Admins existing/deleted on a company page
+-- Replace <CPID> with company ID
+SELECT * FROM prod_dbchanges_AccessControlDB_v2.OwnerControlAssignment
+where key.owner = 'urn:li:organization:<CPID>'
+and datepartition > '2021-08-01'
+
+-- Admins existing/deleted on a company page
+-- Member specific query. Replace MID with Member ID and CPID with Company ID
+SELECT key.owner,key.target,value.state as "New State",value.lastModifiedBy as "New Modified By",value.lastmodifiedat as "new modified time",previousvalue.state as "Old State",previousvalue.lastModifiedBy as "Old Modified By",previousvalue.lastmodifiedat as "old modified time",previousvalue.createdat as "original created time",datepartition
+FROM prod_dbchanges_AccessControlDB_v2.OwnerControlAssignment
+where key.owner = 'urn:li:organization:CPID'
+and key.target = 'urn:li:member:MID'
+order by timestamp desc;
+
+-- History for an Activity ID
+-- Replace ACTIVITYID with Activity ID
+SELECT *
+FROM prod_dbchanges_ucpx2.activityv2event
+WHERE key.id = 'urn:li:activity:[ACTIVITYID]'
+ORDER BY timestamp ASC;
+
+-- Live Video Member Notification StatusLive Video Member Notification Status
+-- Replace dates and ugc ID
+SELECT
+count(*)
+FROM tracking.messagedeliveryevent
+WHERE
+campaignname = 'push_is_live' AND
+datepartition between '2020-10-26' and '2020-10-29' AND
+contentpieces[1] = 'urn:li:ugcPost:6726900210666086402' AND
+cardinality(contentpieces) > 1;
+
+-- Organic Post Status
+-- Replace "idurn" and "header__time"
+select header__memberid as "Member Id", lifecyclestate, header__time as "Time in unix timestamp", contentcertificationrecord from tracking_column.usergeneratedcontentevent
+where idurn = 'urn:li:ugcPost:6686827322064162817'
+and header__time >= 1594252800000
+order by "Time in unix timestamp" asc;
+
+-- Organic Post Status Alternate
+-- Replace "share"
+select header__memberid,header__viewerurn,header__csuserurn, from_unixtime(header__time / 1000) as "Timestamp", lifecyclestate, header__sessionurn ,header__pageinstance__pageurn, idurn, specificcontent__sharecontent__sharecommentary__text, contentcertificationrecord
+FROM tracking_column.usergeneratedcontentevent
+WHERE idUrn = 'urn:li:share:6991819500564226048'
+ORDER BY header__time asc;
+
+-- Posts deleted with actor
+-- Replace header__time timestamp and idurn
+select header__memberid, header__time, lifecyclestate, header__sessionurn ,header__pageinstance__pageurn, idurn, specificcontent__sharecontent__sharecommentary__text, contentcertificationrecord  from tracking_column.usergeneratedcontentevent
+WHERE authorurn = 'urn:li:company:163993'
+and header__time >= 1620084114
+AND lifecyclestate = 'DELETED'
+order by header__time desc;
+
+-- Check if Member attended Event
+-- Replace <MID>
+SELECT * FROM prod_dbchanges_Events.EventAttendee
+where key.memberUrn = 'urn:li:member:<MID>'
+
+-- Check Attendees of an Event
+-- Replace <EVENTURN> and start date
+SELECT * FROM prod_dbchanges_Events.EventAttendee
+WHERE key.eventurn = 'urn:li:event:<EVENTURN>'
+AND datepartition > '08-01-2021'
+
+-- Event registration events from event ID
+-- Replace event ID
+select * from tracking.ProfessionalEventActionEvent where
+professionalevent[1]='urn:li:fs_professionalEvent:6757696310075285504' and actiontype='JOIN_EVENT';
+
+-- Verify standardization of members to Company Page
+-- Replace CP_ID with Company SKU. Must use company SKU and not Company ID.
+select *
+from dwh_dim_column.dim_position a
+WHERE a.final_company_sk = CP_ID
+and end_date is null;
+
+-- Validate Follower Analytics Counts
+-- Replace <company_id> and <date>. Will output each date, A for Adds (new followers), D for Deletes (unfollows), and a count for how many of those Adds/Deletes there were for that given day. The dates won't line up exactly with what shows up in follower analytics due to timezones; in aggregate the numbers should line up.
+select distinct datepartition,status, count(*) as "COUNT" from prod_foundation_tables.fact_sas_company_follower
+where company_id = <company_id> and datepartition > <date>
+group by datepartition,status
+order by datepartition,status;
+
+-- Page deletion logs by member ID
+-- Replace <MEMBERID> and update date partition
+SELECT key.organizationID, value.name.localized FROM prod_dbchanges_OrganizationV2.Organization
+where value.lastModified.actor = 'urn:li:member:14690282'
+and value.entityStatus = 'INACTIVE'
+and datepartition > '2021-04-07'
+
+-- Company page follower count by country
+-- Replace company ID
+SELECT
+a.company_id
+,c.country_name,countrycode
+, COUNT(DISTINCT a.member_id) AS cumulative_followers
+            from      foundation_lms_mp.dim_f_sas_company_follower_current a
+         left join  u_metrics_column.talent_intel_member_position___talent_intel_member_position_metrics b
+         on a.member_id=b.memberid
+         left join stz_derived_mp.bing_geo_country c
+         on b.countrycode=c.country_code
+         WHERE a.company_id in (10612711)
+             AND a.status = 'A' --active follower
+         GROUP BY 1,2,3
+         order by country_name;
+
+-- Show members that are missing standardized company ID
+-- Replace Company ID
+select raw_company_id,std_company_id,count(*) as "COUNT" from prod_foundation_tables.dim_position
+where raw_company_id = 100994
+and is_primary_position = True
+group by 1,2;
+
+-- Confirm Member permissions re: Network Visibility (impacts speaker visibility in Events)
+select *
+from u_metrics.settings_status_v2_union
+where settingkey = 'memberNetworkVisibilityOnLinkedin'
+and datepartition >= '2022-01-01'
+and id in (698479816);
+
+-- Confirm if Product Page was Autopublished
+-- Replace product name
+select value.creationsource,value.created,value.lastmodifiedbyadmin
+from prod_organizationV2.product
+where value.vanityname = 'PRODUCT-NAME';
+

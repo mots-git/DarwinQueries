@@ -1,0 +1,11 @@
+-- Matched count (not rounded)
+-- Replace DMP segment ID
+select *
+from prod_sas.dmp_destination_segments
+where DMP_SEGMENT_ID = 9086163
+
+-- Matched Audiences Summary (Account level)
+-- Replace advertiser id with CMT account id
+select *
+from prod_sas.ad_segments
+where ADVERTISER_ID = 503403327
